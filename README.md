@@ -3,47 +3,46 @@
 A simple tool to search [Salt](https://github.com/saltstack/salt) branches
 and tags for pull requests.
 
-This tool outputs the list of branches and/or tags that the provided
-pull request or git commit is found in.
+This tool takes a pull request number and outputs the list of branches and/or
+tags it is included in.
 
-A git fetch is performed at the beginning of the main Python function. This
-provides the most up-to-date search results for the given pull request
-or commit sha.
+**Note:** A git fetch is performed at the beginning of the main Python
+function. This provides the most up-to-date search results for the query.
 
 ## Installation
 
 The following steps will walk you through building the Docker image needed
 to use this tool.
 
-These step assume Docker is already installed. If you haven't previously
+These steps assume Docker is already installed. If you haven't previously
 installed Docker, follow these [installation instructions](https://docs.docker.com/engine/installation/).
 
-1. First, clone this repo. Then, change directories to the new clone:
+First, clone this repo. Then, change directories to the new clone:
 ```
 $ git clone https://github.com/rallytime/version-check.git
 $ cd version-check/
 ```
-1. Next, build the Docker container:
+Next, build the Docker container:
 ```
 $ docker build -t version_check .
 ```
 
-You should now be ready to use version_check to find branches and tags that
-your pull request is contained in.
+You should now be ready to use `version_check` to identify the branches and
+tags that your pull request is contained in.
 
 ## Usage
 
-The Docker build above copies `version_check.py` into the image and sets
-an `entrypoint` to run the file with Python. That way, you can provide the
-script arguments for the tool directly to the container:
+The `docker build` step above copies `version_check.py` into the image and
+sets an `entrypoint` to run the file with `Python`. That way, you can provide
+the script arguments for the tool directly to the container:
 ```
 $ docker run --rm -it version_check -h
 ```
 
 ### Options
 
-The version_check tool allows you to provide a pull request number or a commit
-hash (but not both).
+`version_check` allows you to provide a pull request number or a commit hash
+(but not both) to query Salt branches and releases.
 
 PR Example:
 ```
@@ -59,7 +58,7 @@ Tags:
   v2017.7.2
 ```
 
-Commit Example (same PR number, but using a commit instead):
+Commit Example (same PR number, but using a commit hash instead):
 ```
 $ docker run --rm -it version_check -c 999388680ca67d9d2aafa6c0fbc3acc5d8389208
 Branches:
@@ -82,7 +81,7 @@ Tags:
   v2016.11.8
 ```
 
-Multiple branches or tags can also be provided:
+Multiple branches or tags can also be used:
 ```
 $ docker run --rm -it version_check -p 42890 -b 2017.7 -b develop
 Branches:
