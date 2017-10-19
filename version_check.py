@@ -34,6 +34,8 @@ VERSION = 'v0.1.0'
 def main():
     '''
     Run!
+
+    Prints results to the screen, as well as returning a result dict.
     '''
     branches = []
     tags = []
@@ -52,6 +54,11 @@ def main():
     if pr_num:
         commit = get_sha(pr_num)
 
+        # Return if an error occurred in get_sha call
+        if isinstance(commit, dict):
+            print(commit.get('error'))
+            return commit
+
     # Get matching branches and tags based on limiters (if any)
     if branch_lims:
         # Branch limiter is passed
@@ -67,21 +74,30 @@ def main():
         branches = get_branch_matches(commit)
         tags = get_tag_matches(commit)
 
-    # Print results
+    ret = {}
+
     found = False
     if branches:
         found = True
+        ret['Branches'] = branches
         print('Branches:')
         for branch in branches:
             print('  ' + branch)
+
     if tags:
         found = True
+        ret['Tags'] = tags
         print('Tags:')
         for tag in tags:
             print('  ' + tag)
+
     if found is False:
-        print('The {0} \'{1}\' was not found.'.format('pull request' if pr_num else 'commit',
-                                                      pr_num if pr_num else commit))
+        comment = 'The {0} \'{1}\' was not found.'.format('pull request' if pr_num else 'commit',
+                                                          pr_num if pr_num else commit)
+        print(comment)
+        ret['comment'] = comment
+
+    return ret
 
 
 def cmd_run(cmd_args):
@@ -187,8 +203,7 @@ def get_sha(pr_num):
                           REMOTE,
                           'pull/{0}/head:{1}'.format(pr_num, branch_name)])
     if branch_cmd['retcode'] != 0:
-        print('ERROR: {0}'.format(branch_cmd['stdout']))
-        return None
+        return {'error': 'ERROR: {0}'.format(branch_cmd['stdout'])}
 
     # Get the commit at the HEAD of the local branch
     cmd_ret = cmd_run(['git', GIT_DIR, 'rev-parse', branch_name])
