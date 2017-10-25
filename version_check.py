@@ -31,7 +31,7 @@ REMOTE = 'origin'
 VERSION = 'v0.1.0'
 
 
-def main():
+def main(args):
     '''
     Run!
 
@@ -41,7 +41,7 @@ def main():
     tags = []
 
     # Parse args and define some basic params
-    args = parse_args()
+    args = parse_args(args)
     commit = args.commit
     pr_num = args.pull_request
     branch_lims = args.branch
@@ -215,7 +215,7 @@ def get_sha(pr_num):
     return sha
 
 
-def parse_args():
+def parse_args(args):
     '''
     Parse the CLI options.
     '''
@@ -235,8 +235,8 @@ def parse_args():
     search_specs.add_argument('-b', '--branch', action='append', help='Branch(es) to search specifically.')
     search_specs.add_argument('-t', '--tag', action='append', help='Release tag(s) to search specifically.')
 
-    return parser.parse_args()
+    return parser.parse_args(args)
 
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv[1:])
