@@ -21,7 +21,6 @@ on the script's functionality in tandem with the Dockerfile.
 
 # Import Python libs
 import argparse
-import getopt
 import subprocess
 import sys
 
