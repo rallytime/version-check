@@ -48,7 +48,8 @@ def main(args):
     tag_lims = args.tag
 
     # Fetch latest from GitHub
-    cmd_run(['git', GIT_DIR, 'fetch', REMOTE])
+    if not args.skip_fetch:
+        cmd_run(['git', GIT_DIR, 'fetch', REMOTE])
 
     # Get commit sha from PR number
     if pr_num:
@@ -222,6 +223,7 @@ def parse_args(args):
     # Define parser and set up basic options
     parser = argparse.ArgumentParser(description='Search for pull requests or commits in Salt')
     parser.add_argument('-v', '--version', action='version', version=VERSION, help='Print version and exit.')
+    parser.add_argument('--skip-fetch', action='store_true', help='Do not fetch latest from upstream.')
 
     # Define mutually exclusive group: Can only search for a PR or commit, not both.
     search_items = parser.add_mutually_exclusive_group(required=True)
