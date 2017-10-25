@@ -8,6 +8,8 @@ tags it is included in.
 
 **Note:** A git fetch is performed at the beginning of the main Python
 function. This provides the most up-to-date search results for the query.
+This functionality can be avoided by passing the [skip-fetch](#skip_fetch)
+flag.
 
 ## Installation
 
@@ -72,6 +74,8 @@ Tags:
   v2017.7.2
 ```
 
+#### Narrowing Search Results
+
 You can also narrow your search to scan specific branches or tags:
 ```
 $ docker run --rm -it version_check -p 42890 -b 2017.7 -t v2016.11.8
@@ -88,3 +92,12 @@ Branches:
   2017.7
   develop
 ```
+
+#### skip_fetch
+
+It's possible to avoid running a `git fetch` every time the `version_check` script
+is executed by passing the `--skip-fetch` flag. This is desirable when a container
+already contains the latest references from GitHub.
+
+**NOTE** Passing `--skip-fetch` will decrease search times significantly, but be
+aware it may cause inconsistent search results if the clone is not up-to-date.
