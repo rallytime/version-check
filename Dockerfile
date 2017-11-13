@@ -5,6 +5,6 @@ RUN apt-get -y install git python-pip
 
 RUN git clone https://github.com/saltstack/salt.git
 
-COPY version_check.py /
+COPY version_check/ /
 
-ENTRYPOINT ["python", "version_check.py"]
+ENTRYPOINT ["python", "cli.py"]
