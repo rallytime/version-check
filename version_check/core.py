@@ -79,8 +79,9 @@ def get_branch_matches(commit, limiters=None):
     '''
     branches = []
     cmd_ret = util.cmd_run(['git', config.GIT_DIR, 'branch', '-a', '--contains', commit])
+    cmd_ret = cmd_ret['stdout'].decode()
     strip_len = len('/'.join(['remotes', config.REMOTE])) + 1
-    for line in cmd_ret['stdout'].splitlines():
+    for line in cmd_ret.splitlines():
         line = line.strip()
         if line.startswith('remotes/'):
             # strip off remotes/REMOTE/
@@ -111,7 +112,8 @@ def get_tag_matches(commit, limiters=None):
     '''
     tags = []
     cmd_ret = util.cmd_run(['git', config.GIT_DIR, 'tag', '--contains', commit])
-    for line in cmd_ret['stdout'].splitlines():
+    cmd_ret = cmd_ret['stdout'].decode()
+    for line in cmd_ret.splitlines():
         if line.startswith('v'):
             tags.append(line)
 
