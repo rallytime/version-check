@@ -130,21 +130,19 @@ class EventHandler(tornado.web.RequestHandler):
         url = params.get('response_url')[0]
 
         try:
-            pr_num = params.get('text')[0]
+            search_item = params.get('text')[0]
         except TypeError:
-            LOG.error('PR number was not provided.')
-            post_data = {'attachments': [{'text': 'Please provide a PR number.',
+            LOG.error('PR number or commit was not provided.')
+            post_data = {'attachments': [{'text': 'Please provide a PR number or commit hash.',
                                           'color': 'danger'}]}
             yield api_call(url, post_data)
             return
 
-        pr_num = pr_num.lstrip('#')
-
         # Respond immediately to slack (no results yet)
-        yield api_call(url, {'text': 'PR #{0} Results:'.format(pr_num)})
+        yield api_call(url, {'text': 'Search Results:'})
 
         # Find matches; longer running job
-        yield get_matches(url, pr_num)
+        yield get_matches(url, search_item)
         return
 
 
@@ -181,7 +179,7 @@ def api_call(url, post_data):
 
 
 @gen.coroutine
-def get_matches(url, pr_num):
+def get_matches(url, search_item):
     '''
     Search for the branches and tags that the PR is included in, then format those
     matches into the correct post_data, and reply to Slack.
@@ -189,14 +187,27 @@ def get_matches(url, pr_num):
     url
         The URL to respond to.
 
-    pr_num
-        The PR number to search for.
+    search_item
+        The PR number or commit hash to search for.
     '''
     post_data = {}
-    LOG.info('PR #%s: Searching for matches.', pr_num)
+    pr_num = None
+    commit = None
+
+    try:
+        int(search_item)
+        pr_num = search_item.lstrip('#')
+        log_id = 'PR #{0}'.format(pr_num)
+    except ValueError:
+        # search_item is a commit hash; use the short SHA
+        commit = search_item[:7]
+        log_id = 'Commit {0}'.format(commit)
+        pass
+
+    LOG.info('%s: Searching for matches.', log_id)
 
     # Find any branch or tag matches
-    matches = core.search(pr_num)
+    matches = core.search(pr_num=pr_num, commit=commit)
     branches = matches.get('branches')
     tags = matches.get('tags')
 
@@ -211,14 +222,14 @@ def get_matches(url, pr_num):
 
     if fields:
         # We have matches, format attachment fields
-        LOG.info('PR #%s: Matches found: %s', pr_num, fields)
+        LOG.info('%s: Matches found: %s', log_id, fields)
         post_data['attachments'] = [{'fields': fields,
                                      'color': 'good'}]
     else:
         # No matches found, set default message
-        LOG.info('PR #%s: No matches found.', pr_num)
+        LOG.info('%s: No matches found.', log_id)
         post_data['attachments'] = [
-            {'text': 'No matches found for PR #{0}'.format(pr_num),
+            {'text': 'No matches found for {0}.'.format(log_id),
              'color': 'warning'}]
 
     # Respond to Slack with results
