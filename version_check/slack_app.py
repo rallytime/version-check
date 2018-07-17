@@ -133,13 +133,13 @@ class EventHandler(tornado.web.RequestHandler):
             search_item = params.get('text')[0]
         except TypeError:
             LOG.error('PR number or commit was not provided.')
-            post_data = {'attachments': [{'text': 'Please provide a PR number or commit hash.',
+            post_data = {'attachments': [{'text': 'Please provide a pull request number or commit hash.',
                                           'color': 'danger'}]}
             yield api_call(url, post_data)
             return
 
         # Respond immediately to slack (no results yet)
-        yield api_call(url, {'text': 'Search Results:'})
+        yield api_call(url, {'text': 'Searching...'})
 
         # Find matches; longer running job
         yield get_matches(url, search_item)
@@ -210,6 +210,7 @@ def get_matches(url, search_item):
     matches = core.search(pr_num=pr_num, commit=commit)
     branches = matches.get('branches')
     tags = matches.get('tags')
+    attachment_title = '{0} Search Results:'.format(log_id)
 
     # Configure matches in respective "fields"
     fields = []
@@ -223,13 +224,15 @@ def get_matches(url, search_item):
     if fields:
         # We have matches, format attachment fields
         LOG.info('%s: Matches found: %s', log_id, fields)
-        post_data['attachments'] = [{'fields': fields,
+        post_data['attachments'] = [{'title': attachment_title,
+                                     'fields': fields,
                                      'color': 'good'}]
     else:
         # No matches found, set default message
         LOG.info('%s: No matches found.', log_id)
         post_data['attachments'] = [
-            {'text': 'No matches found for {0}.'.format(log_id),
+            {'title': attachment_title,
+             'text': 'No matches found.',
              'color': 'warning'}]
 
     # Respond to Slack with results
