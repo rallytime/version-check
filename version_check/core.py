@@ -86,6 +86,9 @@ def get_branch_matches(commit, limiters=None):
         if line.startswith('remotes/'):
             # strip off remotes/REMOTE/
             line = line[strip_len:]
+            # handle other possible remotes - don't include them
+            if '/' in line:
+                continue
             if line.startswith('HEAD'):
                 continue
             branches.append(line)
