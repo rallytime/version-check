@@ -53,18 +53,12 @@ The second step is running the Tornado server (this file). The slack_app.py serv
 receives POST requests from Slack, runs the search, and responds to Slack with the
 results.
 
-Two environment variables must be set before running the server:
+A single environment variable must be set before running the server:
 
-- SLACK_TOKEN
-- SLACK_TEAM_ID
+- SLACK_SIGNING_SECRET
 
-The ``SLACK_TOKEN`` variable is the "Verification Token" that is generated when
-the app is installed in the Slack.
-
-The ``SLACK_TEAM_ID`` is an additional measure used to verify that the POST
-request is coming from the correct Slack team. The easiest way to find this ID is
-to login to the team in a web browser, right click on the page, and select "View
-Page Source". Then, search for "team_id".
+The ``SLACK_SIGNING_SECRET`` variable is the "Signing Secret" that is generated
+when the app is installed in the Slack.
 
 Once the environment variables are in place, run the file to start the server in
 the foreground:
@@ -93,10 +87,13 @@ are up-to-date.
 '''
 
 # Import Python libs
+import hashlib
+import hmac
 import logging
 import json
 import os
 import sys
+import time
 import urllib.parse
 
 # Import tornado libs
@@ -109,8 +106,7 @@ import tornado.httpclient
 import config
 import core
 
-SLACK_TOKEN = os.environ.get('SLACK_TOKEN')
-SLACK_TEAM_ID = os.environ.get('SLACK_TEAM_ID')
+SLACK_SIGNING_SECRET = os.environ.get('SLACK_SIGNING_SECRET')
 
 LOG = logging.getLogger(__name__)
 
@@ -125,30 +121,28 @@ class EventHandler(tornado.web.RequestHandler):
 
     @gen.coroutine
     def post(self, *args, **kwargs):
-        params = urllib.parse.parse_qs(
-            self.request.body.decode()
-        )
-
-        if not _validate_slack_signature(self.request, params):
+        if not _validate_slack_signature(self.request):
             raise tornado.web.HTTPError(401)
 
+        LOG.info('Received Version Check event from slack. Processing...')
+
+        params = urllib.parse.parse_qs(self.request.body.decode())
         url = params.get('response_url')[0]
+
         try:
-            pr_num = params.get('text')[0]
+            search_item = params.get('text')[0]
         except TypeError:
-            LOG.error('PR number was not provided.')
-            post_data = {'attachments': [{'text': 'Please provide a PR number.',
+            LOG.error('PR number or commit was not provided.')
+            post_data = {'attachments': [{'text': 'Please provide a PR number or commit hash.',
                                           'color': 'danger'}]}
             yield api_call(url, post_data)
             return
 
-        pr_num = pr_num.lstrip('#')
-
         # Respond immediately to slack (no results yet)
-        yield api_call(url, {'text': 'PR #{0} Results:'.format(pr_num)})
+        yield api_call(url, {'text': 'Search Results:'})
 
         # Find matches; longer running job
-        yield get_matches(url, pr_num)
+        yield get_matches(url, search_item)
         return
 
 
@@ -185,7 +179,7 @@ def api_call(url, post_data):
 
 
 @gen.coroutine
-def get_matches(url, pr_num):
+def get_matches(url, search_item):
     '''
     Search for the branches and tags that the PR is included in, then format those
     matches into the correct post_data, and reply to Slack.
@@ -193,14 +187,27 @@ def get_matches(url, pr_num):
     url
         The URL to respond to.
 
-    pr_num
-        The PR number to search for.
+    search_item
+        The PR number or commit hash to search for.
     '''
     post_data = {}
-    LOG.info('PR #%s: Searching for matches.', pr_num)
+    pr_num = None
+    commit = None
+
+    try:
+        int(search_item)
+        pr_num = search_item.lstrip('#')
+        log_id = 'PR #{0}'.format(pr_num)
+    except ValueError:
+        # search_item is a commit hash; use the short SHA
+        commit = search_item[:7]
+        log_id = 'Commit {0}'.format(commit)
+        pass
+
+    LOG.info('%s: Searching for matches.', log_id)
 
     # Find any branch or tag matches
-    matches = core.search(pr_num)
+    matches = core.search(pr_num=pr_num, commit=commit)
     branches = matches.get('branches')
     tags = matches.get('tags')
 
@@ -215,14 +222,14 @@ def get_matches(url, pr_num):
 
     if fields:
         # We have matches, format attachment fields
-        LOG.info('PR #%s: Matches found: %s', pr_num, fields)
+        LOG.info('%s: Matches found: %s', log_id, fields)
         post_data['attachments'] = [{'fields': fields,
                                      'color': 'good'}]
     else:
         # No matches found, set default message
-        LOG.info('PR #%s: No matches found.', pr_num)
+        LOG.info('%s: No matches found.', log_id)
         post_data['attachments'] = [
-            {'text': 'No matches found for PR #{0}'.format(pr_num),
+            {'text': 'No matches found for {0}.'.format(log_id),
              'color': 'warning'}]
 
     # Respond to Slack with results
@@ -230,49 +237,30 @@ def get_matches(url, pr_num):
     return
 
 
-def _validate_slack_signature(request, params):
+def _validate_slack_signature(request):
     '''
     Validate that the request is coming from Slack.
 
     request
         The incoming request to validate
-
-    params
-        The incoming request's body parameters
     '''
-    name, version, url = request.headers.get('User-Agent').split()
-    if name != 'Slackbot' or url != '(+https://api.slack.com/robots)':
+    timestamp = request.headers.get('X-Slack-Request-Timestamp')
+    if abs(time.time() - float(timestamp)) > 60 * 5:
+        # The request timestamp is more than five minutes from local time.
+        # It could be a replay attack, so let's ignore it.
         return False
 
-    if params.get('token')[0] != SLACK_TOKEN \
-            and params.get('team_id')[0] != SLACK_TEAM_ID:
-        return False
+    slack_signature = request.headers['X-Slack-Signature'].encode()
+    request_body = request.body.decode('utf-8')
+    sig_basestring = 'v0:{}:{}'.format(timestamp, request_body)
 
-    LOG.info('Received Version Check event from slack. Processing...')
-    return True
+    mac = 'v0=' + hmac.new(
+        SLACK_SIGNING_SECRET.encode(),
+        msg=sig_basestring.encode(),
+        digestmod=hashlib.sha256
+    ).hexdigest()
 
-
-def _check_env_vars():
-    '''
-    Make sure all environment variables are set before starting app.
-    '''
-    check_ok = True
-
-    if SLACK_TOKEN is None:
-        check_ok = False
-        LOG.error(
-            'Version Check was started without a Slack Token. '
-            'Please set the SLACK_TOKEN environment variable.'
-        )
-
-    if SLACK_TEAM_ID is None:
-        check_ok = False
-        LOG.error(
-            'Version Check was started without a Slack Team ID. '
-            'Please set the SLACK_TEAM_ID environment variable.'
-        )
-
-    return check_ok
+    return hmac.compare_digest(mac.encode(), slack_signature)
 
 
 def _setup_logging():
@@ -320,7 +308,11 @@ if __name__ == '__main__':
     _setup_logging()
 
     # Check for mandatory settings.
-    if _check_env_vars() is False:
+    if SLACK_SIGNING_SECRET is None:
+        LOG.error(
+            'Version Check was started without a Slack Signing Secret. '
+            'Please set the SLACK_SIGNING_SECRET environment variable.'
+        )
         sys.exit()
 
     LOG.info('Starting Version Check server.')
