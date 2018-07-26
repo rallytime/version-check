@@ -124,25 +124,12 @@ class EventHandler(tornado.web.RequestHandler):
         if not _validate_slack_signature(self.request):
             raise tornado.web.HTTPError(401)
 
-        LOG.info('Received Version Check event from slack. Processing...')
-
-        params = urllib.parse.parse_qs(self.request.body.decode())
-        url = params.get('response_url')[0]
-
-        try:
-            search_item = params.get('text')[0]
-        except TypeError:
-            LOG.error('PR number or commit was not provided.')
-            post_data = {'attachments': [{'text': 'Please provide a pull request number or commit hash.',
-                                          'color': 'danger'}]}
-            yield api_call(url, post_data)
-            return
-
-        # Respond immediately to slack (no results yet)
-        yield api_call(url, {'text': 'Searching...'})
-
-        # Find matches; longer running job
-        yield get_matches(url, search_item)
+        # Do event work on the ioloop - this allows us to POST to Slack
+        # later with search results, but respond/return to the original
+        # request quickly to avoid `Timeout` errors in the Slack Client.
+        tornado.ioloop.IOLoop.current().add_callback(
+            handle_event, self.request
+        )
         return
 
 
@@ -153,6 +140,37 @@ def make_app():
     return tornado.web.Application([
         ('/salt-version', EventHandler),
     ])
+
+
+@gen.coroutine
+def handle_event(request):
+    '''
+    Handle the event from Slack - find matches, if applicable, and send the
+    POST response back to Slack.
+
+    request
+        The original request from Slack.
+    '''
+    LOG.info('Received Version Check event from slack. Processing...')
+
+    params = urllib.parse.parse_qs(request.body.decode())
+    url = params.get('response_url')[0]
+
+    try:
+        search_item = params.get('text')[0]
+    except TypeError:
+        LOG.error('PR number or commit was not provided.')
+        post_data = {'attachments': [{'text': 'Please provide a pull request number or commit hash.',
+                                      'color': 'danger'}]}
+        yield api_call(url, post_data)
+        return
+
+    # Respond immediately to slack for user happiness
+    yield api_call(url, {'text': 'Searching...'})
+
+    # Find matches; longer running job
+    yield get_matches(url, search_item)
+    return
 
 
 @gen.coroutine
