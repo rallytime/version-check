@@ -23,8 +23,8 @@ on the script's functionality in tandem with the Dockerfile.
 import argparse
 
 # Import version_check libs
-import config
-import core
+import version_check.config as config
+import version_check.core as core
 
 
 def main():

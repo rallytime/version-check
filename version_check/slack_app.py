@@ -103,8 +103,8 @@ import tornado.web
 import tornado.httpclient
 
 # Import Version Check libs
-import config
-import core
+import version_check.config as config
+import version_check.core as core
 
 SLACK_SIGNING_SECRET = os.environ.get('SLACK_SIGNING_SECRET')
 
