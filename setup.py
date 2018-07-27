@@ -22,7 +22,8 @@ setup(name='version-check',
         'Intended Audience :: System Administrators',
         'License :: OSI Approved :: Apache Software License',
         'Operating System :: POSIX :: Linux',
-    ],
+      ],
+      install_requires=['tornado'],
       entry_points='''
         [console_scripts]
         version-check= version_check.cli:main
