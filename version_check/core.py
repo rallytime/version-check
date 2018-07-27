@@ -4,8 +4,8 @@ Core program functionality.
 '''
 
 # Import version_check libs
-import config
-import util
+import version_check.config as config
+import version_check.util as util
 
 
 def search(pr_num=None,
